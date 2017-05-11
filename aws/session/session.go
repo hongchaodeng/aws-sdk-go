@@ -253,6 +253,42 @@ func NewSessionWithOptions(opts Options) (*Session, error) {
 	return newSession(opts, envCfg, &opts.Config)
 }
 
+func NewSessionFromFile(credFile, cfgFile string) (*Session, error) {
+	opts := Options{}
+	var envCfg envConfig
+	if opts.SharedConfigState == SharedConfigEnable {
+		envCfg = loadSharedEnvConfig()
+	} else {
+		envCfg = loadEnvConfig()
+	}
+
+	if len(opts.Profile) > 0 {
+		envCfg.Profile = opts.Profile
+	}
+
+	switch opts.SharedConfigState {
+	case SharedConfigDisable:
+		envCfg.EnableSharedConfig = false
+	case SharedConfigEnable:
+		envCfg.EnableSharedConfig = true
+	}
+
+	// Only use AWS_CA_BUNDLE if session option is not provided.
+	if len(envCfg.CustomCABundle) != 0 && opts.CustomCABundle == nil {
+		f, err := os.Open(envCfg.CustomCABundle)
+		if err != nil {
+			return nil, awserr.New("LoadCustomCABundleError",
+				"failed to open custom CA bundle PEM file", err)
+		}
+		defer f.Close()
+		opts.CustomCABundle = f
+	}
+
+	envCfg.SharedCredentialsFile = credFile
+	envCfg.SharedConfigFile = cfgFile
+	return newSession(opts, envCfg, &opts.Config)
+}
+
 // Must is a helper function to ensure the Session is valid and there was no
 // error when calling a NewSession function.
 //
